@@ -7,4 +7,4 @@ edition = "2021"
 
 [dependencies]
 thiserror = "1.0"
-shrinkwraprs = "0.3.0"
+derive_more = "0.99.17"

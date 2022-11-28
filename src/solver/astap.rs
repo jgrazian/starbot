@@ -30,12 +30,11 @@ use std::sync::Arc;
 use std::thread::sleep;
 use std::time::Duration;
 
+use crate::common::{AstroCoord, WorldTransform};
+use crate::math::Angle;
 use crate::solver::common;
 
-use super::common::{
-    Declination, FieldOfView, Orientation, PixelScale, PlateSolveResult, PlateSolver,
-    RightAscention,
-};
+use super::common::{PlateSolveResult, PlateSolver};
 
 /// ASTAP solver wrapper
 pub struct AstapSolver {
@@ -141,84 +140,31 @@ impl PlateSolver for AstapSolver {
     }
 }
 
-/// Get value out of string of the format
-/// CDELT1  = -6.526249307470E-003 / X pixel size (deg)
-fn extract_value(s: &str) -> &str {
-    let mut flag = false;
-    let mut start_idx = None;
-    let mut end_idx = None;
-
-    for (i, c) in s.char_indices() {
-        match (c, flag) {
-            ('=', _) => flag = true,
-            (' ', true) => match start_idx {
-                None => continue,
-                Some(_) => break,
-            },
-            (_, true) => match (start_idx, end_idx) {
-                (None, _) => start_idx = Some(i),
-                (Some(_), _) => end_idx = Some(i),
-            },
-            (_, false) => continue,
-        }
-    }
-    if let Some(end_idx) = end_idx {
-        s.get(start_idx.unwrap()..end_idx + 1).unwrap()
-    } else {
-        s.get(start_idx.unwrap()..).unwrap()
-    }
-}
-
 fn parse_wcs(wcs_path: &Path) -> Result<PlateSolveResult, AstapSolverError> {
     // Parse resulting .wcs file
-    let mut result = PlateSolveResult::default();
+    let mut ra: f64 = 0.0;
+    let mut dec: f64 = 0.0;
+    let mut cd = [0.0; 4];
 
     let reader = BufReader::new(File::open(wcs_path)?);
     for line in reader.lines() {
         let line = line?;
-        if line.starts_with("CRVAL1") {
-            // RA
-            let value_string = extract_value(&line);
-            let value = value_string.parse::<f64>()?;
-            result = PlateSolveResult {
-                ra: RightAscention::new(value),
-                ..result
-            }
-        } else if line.starts_with("CRVAL2") {
-            // DEC
-            let value_string = extract_value(&line);
-            let value = value_string.parse::<f64>()?;
-            result = PlateSolveResult {
-                dec: Declination::new(value),
-                ..result
-            }
-        } else if line.starts_with("CDELT1") {
-            // Pixel Size
-            let value_string = extract_value(&line);
-            let value = value_string.parse::<f64>()?.abs();
-            result = PlateSolveResult {
-                pixel_scale: PixelScale::new(value),
-                ..result
-            }
-        } else if line.starts_with("CROTA1") {
-            // Pixel Size
-            let value_string = extract_value(&line);
-            let value = value_string.parse::<f64>()?;
-            result = PlateSolveResult {
-                orientation: Orientation::new(value),
-                ..result
-            }
-        } else if line.starts_with("WARNING") {
-            let fov_idx = line.find("FOV=").unwrap();
-            let value = line[fov_idx + 4..fov_idx + 9].parse::<f64>()?;
-            result = PlateSolveResult {
-                fov: FieldOfView::new(value),
-                ..result
-            }
+        let contents = line.get(10..31).unwrap_or("").trim();
+        match &line[0..8] {
+            "CRVAL1  " => ra = contents.parse::<f64>()?,
+            "CRVAL2  " => dec = contents.parse::<f64>()?,
+            "CD1_1   " => cd[0] = contents.parse::<f64>()?,
+            "CD1_2   " => cd[1] = contents.parse::<f64>()?,
+            "CD2_1   " => cd[2] = contents.parse::<f64>()?,
+            "CD2_2   " => cd[3] = contents.parse::<f64>()?,
+            _ => (),
         }
     }
 
-    Ok(result)
+    Ok(PlateSolveResult {
+        coord: AstroCoord::from_ra_dec(Angle::from_degrees(ra), Angle::from_degrees(dec)),
+        transform: WorldTransform::new(cd, [ra, dec]),
+    })
 }
 
 /// Errors from creating the wrapper
@@ -263,20 +209,22 @@ mod test {
         assert_eq!(
             result,
             PlateSolveResult {
-                ra: RightAscention::new(234.5683671466),
-                dec: Declination::new(88.14896797072),
-                fov: FieldOfView::new(25.44),
-                pixel_scale: PixelScale::new(0.006346536461084),
-                orientation: Orientation::new(-83.84870393426)
+                coord: AstroCoord::from_ra_dec(
+                    Angle::from_degrees(234.5683671466),
+                    Angle::from_degrees(88.14896797072)
+                ),
+                transform: WorldTransform::new(
+                    [
+                        -0.0006800583210471,
+                        0.006300323281833,
+                        0.006309995699828,
+                        0.0005179551839743
+                    ],
+                    [234.5683671466, 88.14896797072]
+                ),
             }
         );
         Ok(())
-    }
-
-    #[test]
-    fn test_extract_value() {
-        let str = "CDELT1  = -6.526249307470E-003 / X pixel size (deg)";
-        assert_eq!(extract_value(str), "-6.526249307470E-003");
     }
 
     #[test]
@@ -285,11 +233,19 @@ mod test {
         assert_eq!(
             parse_wcs(wcs_path).unwrap(),
             PlateSolveResult {
-                ra: RightAscention::new(212.500334678),
-                dec: Declination::new(87.87278365695),
-                fov: FieldOfView::new(26.22),
-                pixel_scale: PixelScale::new(0.00652624930747),
-                orientation: Orientation::new(-90.08730825469)
+                coord: AstroCoord::from_ra_dec(
+                    Angle::from_degrees(212.500334678),
+                    Angle::from_degrees(87.87278365695)
+                ),
+                transform: WorldTransform::new(
+                    [
+                        9.944802584645e-6,
+                        0.006515892384153,
+                        0.006526241730441,
+                        -4.221341466003e-5
+                    ],
+                    [212.500334678, 87.87278365695]
+                ),
             }
         );
     }
