@@ -98,6 +98,8 @@ impl WorldTransform {
     }
 }
 
+// https://www.agopax.it/Libri_astronomia/pdf/Astronomical%20Algorithms.pdf
+// https://www.astrogreg.com/snippets/greenwichMeanSiderealTime.html
 fn greenwich_mean_sidereal_time(julian_date: JulianDate) -> Angle {
     //The IAU Resolutions on Astronomical Reference Systems, Time Scales, and Earth Rotation Models Explanation and Implementation (George H. Kaplan)
     //https://arxiv.org/pdf/astro-ph/0602086.pdf
