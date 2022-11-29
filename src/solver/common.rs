@@ -9,7 +9,7 @@
 use std::{error::Error, path::Path};
 
 use crate::{
-    common::{AstroCoord, WorldTransform},
+    common::{SkyCoord, WorldTransform},
     math::Angle,
 };
 
@@ -27,7 +27,7 @@ pub trait PlateSolver {
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
 /// Results of plate solving an image
 pub struct PlateSolveResult {
-    pub coord: AstroCoord,
+    pub coord: SkyCoord,
     pub transform: WorldTransform,
 }
 

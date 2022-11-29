@@ -30,7 +30,7 @@ use std::sync::Arc;
 use std::thread::sleep;
 use std::time::Duration;
 
-use crate::common::{AstroCoord, WorldTransform};
+use crate::common::{SkyCoord, WorldTransform};
 use crate::math::Angle;
 use crate::solver::common;
 
@@ -154,16 +154,16 @@ fn parse_wcs(wcs_path: &Path) -> Result<PlateSolveResult, AstapSolverError> {
             "CRVAL1  " => ra = contents.parse::<f64>()?,
             "CRVAL2  " => dec = contents.parse::<f64>()?,
             "CD1_1   " => cd[0] = contents.parse::<f64>()?,
-            "CD1_2   " => cd[1] = contents.parse::<f64>()?,
-            "CD2_1   " => cd[2] = contents.parse::<f64>()?,
+            "CD1_2   " => cd[2] = contents.parse::<f64>()?,
+            "CD2_1   " => cd[1] = contents.parse::<f64>()?,
             "CD2_2   " => cd[3] = contents.parse::<f64>()?,
             _ => (),
         }
     }
 
     Ok(PlateSolveResult {
-        coord: AstroCoord::from_ra_dec(Angle::from_degrees(ra), Angle::from_degrees(dec)),
-        transform: WorldTransform::new(cd, [ra, dec]),
+        coord: SkyCoord::from_ra_dec(Angle::from_degrees(ra), Angle::from_degrees(dec)),
+        transform: WorldTransform::from_mat2_translation(cd, [ra, dec]),
     })
 }
 
@@ -209,15 +209,15 @@ mod test {
         assert_eq!(
             result,
             PlateSolveResult {
-                coord: AstroCoord::from_ra_dec(
+                coord: SkyCoord::from_ra_dec(
                     Angle::from_degrees(234.5683671466),
                     Angle::from_degrees(88.14896797072)
                 ),
-                transform: WorldTransform::new(
+                transform: WorldTransform::from_mat2_translation(
                     [
                         -0.0006800583210471,
-                        0.006300323281833,
                         0.006309995699828,
+                        0.006300323281833,
                         0.0005179551839743
                     ],
                     [234.5683671466, 88.14896797072]
@@ -233,15 +233,15 @@ mod test {
         assert_eq!(
             parse_wcs(wcs_path).unwrap(),
             PlateSolveResult {
-                coord: AstroCoord::from_ra_dec(
+                coord: SkyCoord::from_ra_dec(
                     Angle::from_degrees(212.500334678),
                     Angle::from_degrees(87.87278365695)
                 ),
-                transform: WorldTransform::new(
+                transform: WorldTransform::from_mat2_translation(
                     [
                         9.944802584645e-6,
-                        0.006515892384153,
                         0.006526241730441,
+                        0.006515892384153,
                         -4.221341466003e-5
                     ],
                     [212.500334678, 87.87278365695]
